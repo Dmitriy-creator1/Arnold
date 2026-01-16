@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ARNOLD: RED SECTOR</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Roboto:wght@400;700&display=swap');
+
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Roboto', sans-serif; user-select: none; }
+        
+        /* UI Оверлеи */
+        .screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background-size: cover; background-position: center; z-index: 1000;
+            text-align: center; color: white; text-shadow: 2px 2px 4px #000;
+        }
+
+        h1 { font-family: 'Black Ops One', cursive; font-size: 70px; margin: 0; color: #b71c1c; letter-spacing: 5px; text-transform: uppercase; text-shadow: 0 0 20px #f00; }
+        h2 { font-size: 24px; margin-bottom: 30px; color: #ffb74d; text-transform: uppercase; letter-spacing: 2px; }
+        p { font-size: 18px; max-width: 600px; background: rgba(0,0,0,0.85); padding: 25px; border-radius: 4px; line-height: 1.6; border: 1px solid #b71c1c; box-shadow: 0 0 30px rgba(0,0,0,1); }
+
+        .btn {
+            background: linear-gradient(180deg, #b71c1c, #4a0000);
+            border: 2px solid #ff5252; color: white; padding: 15px 50px;
+            font-size: 26px; font-family: 'Black Ops One', cursive;
+            cursor: pointer; margin: 15px; text-transform: uppercase;
+            box-shadow: 0 0 20px rgba(183, 28, 28, 0.6);
+            transition: all 0.2s;
+        }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 0 40px rgba(255, 0, 0, 0.8); border-color: #fff; }
+
+        /* Фоны */
+        #intro-screen { background-image: url('https://i.pinimg.com/736x/5c/b8/03/5cb8034ef53a51d3685f3cf76606ad11.jpg'); }
+        #game-over-screen { background-image: url('https://avatars.mds.yandex.net/i?id=d9b5d4be9021eb9519b516abb3b7d1aa42346450-5220021-images-thumbs&n=13'); display: none; }
+        #victory-screen { background-image: url('https://avatars.mds.yandex.net/i?id=2816944e596b085763c6fe73d7c0e68c04285422-5210787-images-thumbs&n=13'); display: none; }
+        #level-select { background: #050000; display: none; }
+
+        /* HUD */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; z-index: 100; }
+        
+        #minimap-container {
+            position: absolute; top: 20px; left: 20px;
+            border: 3px solid #888; background: rgba(0, 0, 0, 0.9);
+            width: 220px; height: 220px; border-radius: 4px; overflow: hidden;
+            box-shadow: 0 0 20px #000;
+        }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%); pointer-events: none;
+        }
+        .ch-line { position: absolute; background: rgba(0, 255, 0, 0.9); box-shadow: 0 0 5px #0f0; }
+        .ch-h { width: 100%; height: 2px; top: 9px; }
+        .ch-v { width: 2px; height: 100%; left: 9px; }
+
+        #ammo-display {
+            position: absolute; bottom: 30px; right: 40px;
+            font-family: 'Black Ops One'; font-size: 50px; color: #ffeb3b;
+            text-shadow: 0 0 15px #ffeb3b; text-align: right;
+        }
+        #ammo-bar {
+            width: 200px; height: 10px; background: #333; margin-top: 5px;
+            border: 1px solid #555;
+        }
+        #ammo-fill { width: 100%; height: 100%; background: #ffeb3b; transition: width 0.2s; }
+
+        #reload-msg {
+            position: absolute; top: 60%; left: 50%; transform: translateX(-50%);
+            font-family: 'Black Ops One'; font-size: 40px; color: #ff3d00;
+            text-shadow: 2px 2px 0 #000; letter-spacing: 5px;
+            display: none;
+        }
+
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, rgba(180,0,0,0.9) 120%);
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+        }
+
+        /* Mobile */
+        #mobile-controls {
+            position: absolute; bottom: 20px; width: 100%; height: 150px;
+            display: none; pointer-events: auto; justify-content: space-between; padding: 0 30px; box-sizing: border-box;
+        }
+        .mob-btn {
+            width: 80px; height: 80px; background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; color: white;
+            display: flex; align-items: center; justify-content: center; font-weight: bold;
+        }
+        #shoot-btn { width: 100px; height: 100px; background: rgba(255, 0, 0, 0.2); border-color: red; }
+
+        .blinking { animation: blink 0.5s infinite alternate; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
+    </style>
+</head>
+<body>
+
+    <div id="intro-screen" class="screen">
+        <h1>ARNOLD</h1>
+        <h2>RED SECTOR PROTOCOL</h2>
+        <p>Ты попал в Красный Сектор. Это древние катакомбы.<br>Враги мутировали: теперь они выше и сильнее.<br>У тебя 50 патронов в магазине. Не забывай перезаряжаться.</p>
+        <button class="btn" onclick="goToLevelSelect()">НАЧАТЬ МИССИЮ</button>
+    </div>
+
+    <div id="level-select" class="screen">
+        <h1>СЛОЖНОСТЬ</h1>
+        <button class="btn" onclick="startGame(1)">ЛЕГКО (ПРОГУЛКА)</button>
+        <button class="btn" onclick="startGame(2)">НОРМА (БОЙ)</button>
+        <button class="btn" onclick="startGame(3)">ХАРДКОР (СМЕРТЬ)</button>
+    </div>
+
+    <div id="game-over-screen" class="screen">
+        <h1 class="blinking" style="color: #ff0000;">YOU ARE DEAD</h1>
+        <p>Тебя растерзали во тьме.</p>
+        <button class="btn" onclick="location.reload()">ВОЗРОДИТЬСЯ</button>
+    </div>
+
+    <div id="victory-screen" class="screen">
+        <h1 style="color: #00e676;">MISSION COMPLETE</h1>
+        <p>Арнольд выбрался живым.</p>
+        <button class="btn" onclick="location.reload()">В МЕНЮ</button>
+    </div>
+
+    <div id="hud">
+        <div id="minimap-container"><canvas id="minimap" width="220" height="220"></canvas></div>
+        <div id="crosshair">
+            <div class="ch-line ch-h"></div>
+            <div class="ch-line ch-v"></div>
+        </div>
+        <div id="reload-msg">ПЕРЕЗАРЯДКА...</div>
+        <div id="ammo-display">
+            <span id="ammo-count">50</span> / 50
+            <div id="ammo-bar"><div id="ammo-fill"></div></div>
+        </div>
+        <div id="damage-overlay"></div>
+        <div id="mobile-controls">
+            <div class="mob-btn" id="aim-btn">ПРИЦЕЛ</div>
+            <div class="mob-btn" id="shoot-btn">ОГОНЬ</div>
+        </div>
+    </div>
+
+    <audio id="bg-music" loop>
+        <source src="https://rus.hitmotop.com/get/music/20190518/Rammstein_-_AUSLNDER_64285337.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sfx-shoot" src="https://www.myinstants.com/media/sounds/m4a1-single.mp3"></audio>
+    <audio id="sfx-reload" src="https://www.myinstants.com/media/sounds/m4a1_reload.mp3"></audio>
+    <audio id="sfx-monster" src="https://www.myinstants.com/media/sounds/zombie_growl.mp3"></audio>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // --- CONFIG ---
+        const PLAYER_HEIGHT = 1.7;
+        const ENEMY_HEIGHT = 2.1; // Высокие монстры
+        const PLAYER_SPEED = 0.28; // Быстрый персонаж
+        const MAGAZINE_SIZE = 50;
+        const RELOAD_TIME = 3000;
+        const CELL_SIZE = 12;
+
+        let camera, scene, renderer, controls;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let raycaster;
+        let gameActive = false;
+        let lastTime = performance.now();
+        let gunGroup;
+        let torches = [];
+        let enemies = [];
+        let maze = [];
+        let mazeWidth, mazeHeight;
+        let exitPosition = new THREE.Vector3();
+        let miniMapCtx = document.getElementById('minimap').getContext('2d');
+        
+        let player = { health: 100 };
+        let ammo = MAGAZINE_SIZE;
+        let isReloading = false;
+        let isAiming = false;
+
+        const levels = {
+            1: { w: 8, h: 8, enemies: 5 },
+            2: { w: 12, h: 12, enemies: 15 },
+            3: { w: 18, h: 18, enemies: 30 }
+        };
+
+        // --- TEXTURES (HIGH QUALITY PROCEDURAL) ---
+        function createWallTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            
+            // Базовый цвет (Бордовый)
+            ctx.fillStyle = '#4a0e0e'; 
+            ctx.fillRect(0,0,1024,1024);
+            
+            // Шум и гранж
+            for(let i=0; i<5000; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#2b0505' : '#631818';
+                ctx.fillRect(Math.random()*1024, Math.random()*1024, Math.random()*4, Math.random()*4);
+            }
+
+            // Кирпичная кладка
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            for(let y=0; y<1024; y+=128) {
+                const offset = (y/128)%2 === 0 ? 0 : 128;
+                for(let x=offset; x<1024; x+=256) {
+                    ctx.fillRect(x, y, 250, 110); // Тень кирпича
+                }
+            }
+            
+            // Потеки
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            for(let i=0; i<50; i++) {
+                let x = Math.random()*1024;
+                let h = Math.random()*300 + 100;
+                ctx.fillRect(x, 0, 2, h);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        // --- GAME INIT ---
+        function initGame(levelConfig) {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+            scene.fog = new THREE.FogExp2(0x000000, 0.04);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Ambient
+            scene.add(new THREE.AmbientLight(0x110505, 0.4)); // Слабая красноватая подсветка
+
+            // FLASHLIGHT (YELLOW)
+            const spotLight = new THREE.SpotLight(0xffcc00, 5.0); // Желтый мощный свет
+            spotLight.position.set(0, 0, 0);
+            spotLight.angle = 0.55;
+            spotLight.penumbra = 0.5;
+            spotLight.decay = 1.2;
+            spotLight.distance = 55;
+            spotLight.castShadow = true;
+            camera.add(spotLight);
+            spotLight.target.position.set(0, 0, -1);
+            camera.add(spotLight.target);
+            scene.add(camera);
+
+            controls = new PointerLockControls(camera, document.body);
+
+            // MAZE GENERATION
+            mazeWidth = levelConfig.w; mazeHeight = levelConfig.h;
+            generateMazeLevel();
+
+            buildPlayerModel();
+            spawnEnemies(levelConfig.enemies);
+
+            // Events
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mouseup', onMouseUp);
+            document.getElementById('shoot-btn').addEventListener('touchstart', (e)=>{e.preventDefault(); shoot()});
+            
+            gameActive = true;
+            animate();
+        }
+
+        function generateMazeLevel() {
+            // Recursive Backtracker Maze
+            let grid = [];
+            for(let x=0; x<mazeWidth; x++) {
+                grid[x] = [];
+                for(let y=0; y<mazeHeight; y++) {
+                    grid[x][y] = { x, y, walls: [true,true,true,true], visited: false };
+                }
+            }
+            let stack = [];
+            let current = grid[0][0];
+            current.visited = true;
+            
+            while(true) {
+                let neighbors = [];
+                const {x,y} = current;
+                if(y>0 && !grid[x][y-1].visited) neighbors.push({c:grid[x][y-1], d:0});
+                if(x<mazeWidth-1 && !grid[x+1][y].visited) neighbors.push({c:grid[x+1][y], d:1});
+                if(y<mazeHeight-1 && !grid[x][y+1].visited) neighbors.push({c:grid[x][y+1], d:2});
+                if(x>0 && !grid[x-1][y].visited) neighbors.push({c:grid[x-1][y], d:3});
+                
+                if(neighbors.length > 0) {
+                    let next = neighbors[Math.floor(Math.random()*neighbors.length)];
+                    stack.push(current);
+                    current.walls[next.d] = false;
+                    next.c.walls[(next.d+2)%4] = false;
+                    current = next.c;
+                    current.visited = true;
+                } else if(stack.length > 0) current = stack.pop();
+                else break;
+            }
+            maze = grid;
+
+            // Build Geometry
+            const wallTex = createWallTexture();
+            const wallMat = new THREE.MeshStandardMaterial({ 
+                map: wallTex, roughness: 0.6, metalness: 0.1, bumpMap: wallTex, bumpScale: 0.05 
+            });
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+            
+            // Floor
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(mazeWidth*CELL_SIZE, mazeHeight*CELL_SIZE), floorMat);
+            floor.rotation.x = -Math.PI/2;
+            floor.position.set((mazeWidth*CELL_SIZE)/2 - CELL_SIZE/2, 0, (mazeHeight*CELL_SIZE)/2 - CELL_SIZE/2);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Ceiling
+            const ceil = new THREE.Mesh(new THREE.PlaneGeometry(mazeWidth*CELL_SIZE, mazeHeight*CELL_SIZE), new THREE.MeshBasicMaterial({color:0x050000}));
+            ceil.rotation.x = Math.PI/2;
+            ceil.position.set((mazeWidth*CELL_SIZE)/2 - CELL_SIZE/2, 9, (mazeHeight*CELL_SIZE)/2 - CELL_SIZE/2);
+            scene.add(ceil);
+
+            for(let x=0; x<mazeWidth; x++) {
+                for(let y=0; y<mazeHeight; y++) {
+                    const c = maze[x][y];
+                    const cx = x*CELL_SIZE, cy = y*CELL_SIZE;
+                    if(c.walls[0]) addWall(cx, cy-CELL_SIZE/2, true);
+                    if(c.walls[2]) addWall(cx, cy+CELL_SIZE/2, true);
+                    if(c.walls[1]) addWall(cx+CELL_SIZE/2, cy, false);
+                    if(c.walls[3]) addWall(cx-CELL_SIZE/2, cy, false);
+                }
+            }
+
+            exitPosition.set((mazeWidth-1)*CELL_SIZE, 0, (mazeHeight-1)*CELL_SIZE);
+            const exitLight = new THREE.PointLight(0x00ff00, 2, 20);
+            exitLight.position.set(exitPosition.x, 4, exitPosition.z);
+            scene.add(exitLight);
+            
+            function addWall(x, z, h) {
+                const w = new THREE.Mesh(new THREE.BoxGeometry(h?CELL_SIZE:1, 9, h?1:CELL_SIZE), wallMat);
+                w.position.set(x, 4.5, z);
+                w.castShadow = true; w.receiveShadow = true;
+                scene.add(w);
+                if(Math.random()<0.15) addTorch(x, 5, z, h);
+            }
+        }
+
+        function addTorch(x, y, z, h) {
+            const t = new THREE.Group();
+            const light = new THREE.PointLight(0xff5500, 1, 15);
+            light.position.set(0, 0.5, 0.5);
+            t.add(light);
+            
+            const fire = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({color:0xffaa00}));
+            fire.position.set(0, 0.4, 0.4);
+            t.add(fire);
+            
+            t.position.set(x, y, z);
+            if(h) t.position.z += Math.random()>0.5?0.6:-0.6;
+            else t.position.x += Math.random()>0.5?0.6:-0.6;
+            scene.add(t);
+            torches.push({l:light, m:fire, base:1});
+        }
+
+        // --- PLAYER & WEAPON ---
+        function buildPlayerModel() {
+            gunGroup = new THREE.Group();
+            
+            // Руки
+            const armMat = new THREE.MeshStandardMaterial({color: 0xffffff}); // Белая рубашка
+            const skinMat = new THREE.MeshStandardMaterial({color: 0xdcae96}); 
+            
+            // Правая рука (спуск)
+            const rArm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.8), armMat);
+            rArm.rotation.set(-1.2, 0, -0.2);
+            rArm.position.set(0.35, -0.5, -0.2);
+            gunGroup.add(rArm);
+            
+            // Левая рука (цевье)
+            const lArm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.9), armMat);
+            lArm.rotation.set(-1.3, 0, 0.4);
+            lArm.position.set(-0.25, -0.5, -0.3);
+            gunGroup.add(lArm);
+
+            // Часы Rolex
+            const watch = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 32), new THREE.MeshStandardMaterial({color: 0xc0c0c0, metalness: 1, roughness: 0.1}));
+            watch.position.set(0, -0.35, 0);
+            lArm.add(watch);
+            const face = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 32), new THREE.MeshBasicMaterial({color:0x000}));
+            face.position.y = 0.01;
+            watch.add(face);
+
+            // Винтовка
+            const gunMat = new THREE.MeshStandardMaterial({color: 0x1a1a1a, metalness: 0.8, roughness: 0.2});
+            const gun = new THREE.Group();
+            
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 0.6), gunMat);
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8), gunMat);
+            barrel.rotation.x = Math.PI/2; barrel.position.z = -0.5; barrel.position.y = 0.05;
+            const mag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.35, 0.12), new THREE.MeshStandardMaterial({color:0x111}));
+            mag.position.set(0, -0.2, 0.1); mag.rotation.x = 0.2;
+            
+            // Прицел
+            const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.25), gunMat);
+            scope.rotation.x = Math.PI/2; scope.position.y = 0.13;
+            
+            gun.add(body, barrel, mag, scope);
+            gun.position.set(0.25, -0.25, -0.6);
+            gunGroup.add(gun);
+
+            camera.add(gunGroup);
+        }
+
+        // --- ENEMIES (TALL & SCARY) ---
+        function spawnEnemies(count) {
+            const mat = new THREE.MeshStandardMaterial({color: 0x222, roughness: 0.9}); // Темная кожа
+            for(let i=0; i<count; i++) {
+                const g = new THREE.Group();
+                
+                // Тело (Худое и высокое)
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.9, 0.25), mat);
+                torso.position.y = 1.1;
+                g.add(torso);
+                
+                // Голова (На уровне глаз игрока ~1.7)
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.35, 0.3), mat);
+                head.position.y = 1.75; 
+                g.add(head);
+                
+                // Глаза (Красные светящиеся)
+                const eyeGeo = new THREE.SphereGeometry(0.04);
+                const eyeMat = new THREE.MeshBasicMaterial({color: 0xff0000});
+                const e1 = new THREE.Mesh(eyeGeo, eyeMat); e1.position.set(0.08, 1.75, 0.16);
+                const e2 = new THREE.Mesh(eyeGeo, eyeMat); e2.position.set(-0.08, 1.75, 0.16);
+                g.add(e1, e2);
+
+                // Длинные конечности
+                const limbGeo = new THREE.BoxGeometry(0.1, 0.9, 0.1);
+                const lLeg = new THREE.Mesh(limbGeo, mat); lLeg.position.set(-0.15, 0.45, 0);
+                const rLeg = new THREE.Mesh(limbGeo, mat); rLeg.position.set(0.15, 0.45, 0);
+                g.add(lLeg, rLeg);
+
+                let ex, ez;
+                do {
+                    ex = Math.floor(Math.random()*mazeWidth)*CELL_SIZE;
+                    ez = Math.floor(Math.random()*mazeHeight)*CELL_SIZE;
+                } while(ex<15 && ez<15);
+
+                g.position.set(ex, 0, ez);
+                g.userData = { hp: 2, speed: 0.12 + Math.random()*0.05, id: i };
+                scene.add(g);
+                enemies.push(g);
+            }
+        }
+
+        // --- MECHANICS ---
+        function shoot() {
+            if(!gameActive || isReloading) return;
+
+            if(ammo <= 0) {
+                reloadWeapon();
+                return;
+            }
+
+            ammo--;
+            updateAmmoUI();
+
+            // Recoil
+            gunGroup.position.z += 0.2;
+            gunGroup.rotation.x += 0.2;
+
+            // Audio
+            const snd = document.getElementById('sfx-shoot');
+            snd.currentTime = 0; snd.volume = 0.5; snd.play();
+
+            // Flash
+            const f = new THREE.PointLight(0xffaa00, 3, 5);
+            f.position.set(0.2, -0.1, -1.5);
+            camera.add(f);
+            setTimeout(()=>camera.remove(f), 50);
+
+            // Raycast
+            raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const hits = raycaster.intersectObjects(scene.children, true);
+
+            for(let h of hits) {
+                if(h.distance > 80) continue;
+                let obj = h.object;
+                while(obj.parent && obj.parent.type !== 'Scene') {
+                    if(enemies.includes(obj.parent)) {
+                        damageEnemy(obj.parent);
+                        return;
+                    }
+                    obj = obj.parent;
+                }
+                if(h.distance < 80) break; // Hit wall
+            }
+
+            if(ammo === 0) reloadWeapon();
+        }
+
+        function reloadWeapon() {
+            if(isReloading) return;
+            isReloading = true;
+            document.getElementById('reload-msg').style.display = 'block';
+            document.getElementById('sfx-reload').play();
+
+            // Анимация: опустить оружие
+            const startRot = gunGroup.rotation.x;
+            const interval = setInterval(() => {
+                gunGroup.rotation.x = THREE.MathUtils.lerp(gunGroup.rotation.x, -1.0, 0.1);
+            }, 20);
+
+            setTimeout(() => {
+                clearInterval(interval);
+                ammo = MAGAZINE_SIZE;
+                isReloading = false;
+                updateAmmoUI();
+                document.getElementById('reload-msg').style.display = 'none';
+                gunGroup.rotation.x = 0; // Вернуть оружие
+            }, RELOAD_TIME);
+        }
+
+        function damageEnemy(e) {
+            e.userData.hp--;
+            // Blood
+            const b = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({color:0x880000}));
+            b.position.copy(e.position); b.position.y = 1.8;
+            scene.add(b);
+            setTimeout(()=>scene.remove(b), 100);
+
+            if(e.userData.hp <= 0) {
+                scene.remove(e);
+                enemies = enemies.filter(x => x!==e);
+            }
+        }
+
+        function updateAmmoUI() {
+            document.getElementById('ammo-count').innerText = ammo;
+            document.getElementById('ammo-fill').style.width = (ammo/MAGAZINE_SIZE*100) + '%';
+            if(ammo < 10) document.getElementById('ammo-fill').style.background = 'red';
+            else document.getElementById('ammo-fill').style.background = '#ffeb3b';
+        }
+
+        // --- LOOP ---
+        function animate() {
+            if(!gameActive) return;
+            requestAnimationFrame(animate);
+
+            const time = performance.now();
+            camera.position.y = PLAYER_HEIGHT; // Fixed height
+
+            // Movement
+            if(controls.isLocked) {
+                const dir = new THREE.Vector3();
+                camera.getWorldDirection(dir); dir.y=0; dir.normalize();
+                const side = new THREE.Vector3().crossVectors(camera.up, dir).normalize();
+                const next = camera.position.clone();
+                
+                if(moveForward) next.add(dir.multiplyScalar(PLAYER_SPEED));
+                if(moveBackward) next.add(dir.multiplyScalar(-PLAYER_SPEED));
+                if(moveRight) next.add(side.multiplyScalar(PLAYER_SPEED));
+                if(moveLeft) next.add(side.multiplyScalar(-PLAYER_SPEED));
+
+                if(!checkColl(next)) {
+                    camera.position.x = next.x;
+                    camera.position.z = next.z;
+                }
+            }
+
+            // Weapon Logic
+            if(!isReloading) {
+                const target = isAiming ? new THREE.Vector3(0, -0.195, -0.3) : new THREE.Vector3(0.25, -0.35, -0.6);
+                gunGroup.position.lerp(target, 0.2);
+                gunGroup.rotation.x = THREE.MathUtils.lerp(gunGroup.rotation.x, 0, 0.1);
+                // Sway
+                gunGroup.position.y += Math.sin(time*0.004)*0.0005;
+                gunGroup.rotation.z = Math.sin(time*0.003)*0.01;
+            }
+
+            // Enemies
+            enemies.forEach(e => {
+                const dist = e.position.distanceTo(camera.position);
+                if(dist < 40) {
+                    const dir = new THREE.Vector3().subVectors(camera.position, e.position).normalize();
+                    dir.y = 0;
+                    e.position.add(dir.multiplyScalar(e.userData.speed));
+                    e.lookAt(camera.position);
+                    
+                    if(dist < 1.0) {
+                        player.health -= 2;
+                        document.getElementById('damage-overlay').style.opacity = 1;
+                        setTimeout(()=>document.getElementById('damage-overlay').style.opacity=0, 150);
+                        if(player.health <= 0) gameOver();
+                    }
+                    if(Math.random()<0.01) {
+                         const s = document.getElementById('sfx-monster');
+                         s.volume = Math.max(0, 1 - dist/40); s.play();
+                    }
+                }
+            });
+
+            // Torch Flicker
+            torches.forEach(t => {
+                t.l.intensity = t.base + Math.sin(time*0.015)*0.3 + Math.random()*0.1;
+            });
+
+            if(camera.position.distanceTo(exitPosition) < 5) victory();
+            updateMiniMap();
+            renderer.render(scene, camera);
+        }
+
+        function checkColl(pos) {
+            const gx = Math.round(pos.x/CELL_SIZE), gz = Math.round(pos.z/CELL_SIZE);
+            if(gx<0||gx>=mazeWidth||gz<0||gz>=mazeHeight) return true;
+            const lx = pos.x - gx*CELL_SIZE, lz = pos.z - gz*CELL_SIZE;
+            const cell = maze[gx][gz];
+            const b = 2.0;
+            if(cell.walls[0] && lz < -CELL_SIZE/2+b) return true;
+            if(cell.walls[2] && lz > CELL_SIZE/2-b) return true;
+            if(cell.walls[1] && lx > CELL_SIZE/2-b) return true;
+            if(cell.walls[3] && lx < -CELL_SIZE/2+b) return true;
+            return false;
+        }
+
+        function updateMiniMap() {
+            miniMapCtx.fillStyle = '#000'; miniMapCtx.fillRect(0,0,220,220);
+            const sc = 220 / (Math.max(mazeWidth,mazeHeight)*CELL_SIZE);
+            
+            // Map
+            miniMapCtx.fillStyle = '#331111'; // Dark Red map
+            for(let x=0; x<mazeWidth; x++) for(let y=0; y<mazeHeight; y++) {
+                miniMapCtx.fillRect(x*CELL_SIZE*sc, y*CELL_SIZE*sc, CELL_SIZE*sc, CELL_SIZE*sc);
+            }
+            // Exit
+            miniMapCtx.fillStyle = '#0f0';
+            miniMapCtx.fillRect(exitPosition.x*sc, exitPosition.z*sc, 6, 6);
+            // Player
+            miniMapCtx.fillStyle = '#0f0';
+            miniMapCtx.beginPath(); miniMapCtx.arc(camera.position.x*sc, camera.position.z*sc, 3, 0, Math.PI*2); miniMapCtx.fill();
+            // Enemies
+            miniMapCtx.fillStyle = '#f00';
+            enemies.forEach(e => {
+                miniMapCtx.beginPath(); miniMapCtx.arc(e.position.x*sc, e.position.z*sc, 2, 0, Math.PI*2); miniMapCtx.fill();
+            });
+        }
+
+        // Input
+        function onKeyDown(e) { switch(e.code){case 'KeyW':moveForward=true;break; case 'KeyA':moveLeft=true;break; case 'KeyS':moveBackward=true;break; case 'KeyD':moveRight=true;break;} }
+        function onKeyUp(e) { switch(e.code){case 'KeyW':moveForward=false;break; case 'KeyA':moveLeft=false;break; case 'KeyS':moveBackward=false;break; case 'KeyD':moveRight=false;break;} }
+        function onMouseDown(e) { if(!controls.isLocked) controls.lock(); if(e.button===0) shoot(); if(e.button===2) isAiming=true; }
+        function onMouseUp(e) { if(e.button===2) isAiming=false; }
+
+        window.goToLevelSelect = function() {
+            document.getElementById('intro-screen').style.display = 'none';
+            document.getElementById('level-select').style.display = 'flex';
+            const m = document.getElementById('bg-music'); m.volume=0.3; m.play();
+        }
+        window.startGame = function(lvl) {
+            document.getElementById('level-select').style.display='none';
+            document.getElementById('hud').style.display='block';
+            if('ontouchstart' in window) document.getElementById('mobile-controls').style.display='flex';
+            initGame(levels[lvl]);
+        }
+        window.location.reload = ()=>location.reload();
+        function gameOver() { gameActive=false; document.exitPointerLock(); document.getElementById('hud').style.display='none'; document.getElementById('game-over-screen').style.display='flex'; }
+        function victory() { gameActive=false; document.exitPointerLock(); document.getElementById('hud').style.display='none'; document.getElementById('victory-screen').style.display='flex'; }
+
+    </script>
+</body>
+</html>
